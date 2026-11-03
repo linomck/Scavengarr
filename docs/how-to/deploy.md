@@ -53,11 +53,10 @@ docker run -d --name scavengarr \
 
 ### 3. Or use Docker Compose
 
-The repository's [`docker-compose.yml`](../../docker-compose.yml) runs the published image, or builds the checkout with the block it carries commented. It joins the external `proxy` network of Traefik (labels carry its router; no port is published) and always runs Byparr, wired in through `SCAVENGARR_PLAYWRIGHT_SOLVER_URL`.
+The repository's [`docker-compose.yml`](../../docker-compose.yml) builds this checkout (`image: scavengarr:local`; the published image is a commented alternative). It joins the external `proxy` network of Traefik (labels carry its router; no port is published) and always runs Byparr, wired in through `SCAVENGARR_PLAYWRIGHT_SOLVER_URL`.
 
 ```bash
-docker compose up -d                          # start
-docker compose pull && docker compose up -d   # update
+docker compose up -d --build   # start, or rebuild after a change
 ```
 
 The service sets `init: true`, `shm_size: 1gb` (Chromium needs shared memory), `FORWARDED_ALLOW_IPS` for a reverse proxy (step 7) and a log rotation (Troubleshooting).

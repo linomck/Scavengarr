@@ -1,28 +1,27 @@
-# Scavengarr with Docker Compose (the published image, see the README).
+# Scavengarr with Docker Compose (built from this checkout).
 #
-#   docker compose up -d                          # Scavengarr only
-#   docker compose pull && docker compose up -d   # update
+#   docker compose up -d --build   # start, or rebuild after a change
 #
 # Traefik terminates TLS on the external "proxy" network (no published port);
 # Byparr always runs.
 
 services:
   scavengarr:
-    # latest: the newest release; staging: every push to the staging branch
-    image: ghcr.io/strob0t/scavengarr:latest
-    # Or build this checkout (docker compose up -d --build): replace the image
-    # line with the block below. The build records the checkout's commit and
+    # Built from this checkout (docker compose up -d --build). To use the
+    # published image instead, replace the image and build lines with
+    #   image: ghcr.io/strob0t/scavengarr:latest
+    # The build records the checkout's commit and
     # the build time (scavengarr_build_info, /api/v1/healthz); the build
     # arguments set them explicitly, e.g.
     #   SCAVENGARR_COMMIT=$(git rev-parse --short=12 HEAD) \
     #   SCAVENGARR_BUILT=$(date -u +%Y-%m-%dT%H:%M:%SZ) docker compose up -d --build
-    # image: scavengarr:local
-    # build:
-    #   context: .
-    #   dockerfile: Dockerfile.prod
-    #   args:
-    #     SCAVENGARR_COMMIT: ${SCAVENGARR_COMMIT:-}
-    #     SCAVENGARR_BUILT: ${SCAVENGARR_BUILT:-}
+    image: scavengarr:local
+    build:
+      context: .
+      dockerfile: Dockerfile.prod
+      args:
+        SCAVENGARR_COMMIT: ${SCAVENGARR_COMMIT:-}
+        SCAVENGARR_BUILT: ${SCAVENGARR_BUILT:-}
     container_name: scavengarr
     networks:
       - default # Byparr
