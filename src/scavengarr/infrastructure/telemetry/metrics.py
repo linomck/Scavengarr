@@ -134,6 +134,8 @@ _STAGES: dict[StageName, _StageSpec] = {
 # One event per segment would bury the dashboard's feed
 _UNFED: frozenset[StageName] = frozenset({"hls_proxy", "hls_readahead"})
 
+_FED_VALUES: frozenset[ValueName] = frozenset({"plugin_results", "stremio_streams"})
+
 _SUCCESSES = ("hits", "empty")
 _FAILURES = ("error", "cut", "timeout")
 
@@ -279,7 +281,7 @@ class Telemetry:
             self.feed.publish("stage", stage=name, outcome=outcome, **labels)
 
     def record(self, name: ValueName, value: float, /, **labels: str) -> None:
-        if name == "plugin_results":
+        if name in _FED_VALUES:
             self.feed.publish("value", name=name, value=value, **labels)
         metric = self._values[name]
         child = metric.labels(**labels) if labels else metric

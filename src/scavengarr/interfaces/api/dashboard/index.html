@@ -10,36 +10,44 @@
     --ok: #3fb950; --warn: #d29922; --bad: #f85149; --info: #58a6ff;
   }
   * { box-sizing: border-box; }
-  body { margin: 0; background: var(--bg); color: var(--text);
-         font: 14px/1.4 system-ui, sans-serif; }
-  header { display: flex; align-items: center; gap: 16px; padding: 10px 16px;
-           border-bottom: 1px solid var(--line); position: sticky; top: 0; background: var(--bg); z-index: 1; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 14px/1.4 system-ui, sans-serif; }
+  header { display: flex; align-items: center; gap: 16px; padding: 10px 16px; border-bottom: 1px solid var(--line);
+           position: sticky; top: 0; background: var(--bg); z-index: 1; }
   h1 { font-size: 16px; margin: 0; }
   h2 { font-size: 13px; margin: 0 0 8px; color: var(--dim); text-transform: uppercase; letter-spacing: .05em; }
   .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--bad); display: inline-block; margin-right: 6px; }
   .dot.live { background: var(--ok); }
-  main { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr); gap: 12px; padding: 12px; }
-  @media (max-width: 1000px) { main { grid-template-columns: 1fr; } }
+  main { display: grid; grid-template-columns: minmax(280px, 360px) minmax(0, 1fr); gap: 12px; padding: 12px; }
+  @media (max-width: 900px) { main { grid-template-columns: 1fr; } }
   .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 12px; min-width: 0; }
   .stack { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
   table { width: 100%; border-collapse: collapse; font-size: 13px; }
   th, td { text-align: right; padding: 3px 6px; border-bottom: 1px solid var(--line); white-space: nowrap; }
   th:first-child, td:first-child { text-align: left; }
+  td.left, th.left { text-align: left; white-space: normal; }
   th { color: var(--dim); font-weight: 500; }
-  .ok { color: var(--ok); } .warn { color: var(--warn); } .bad { color: var(--bad); } .dim { color: var(--dim); }
-  .tabs button, header button { background: var(--panel); color: var(--text); border: 1px solid var(--line);
-         border-radius: 4px; padding: 3px 10px; cursor: pointer; font: inherit; }
-  .tabs button.on { border-color: var(--info); color: var(--info); }
-  .tabs { display: flex; gap: 6px; margin-bottom: 8px; flex-wrap: wrap; }
-  #feed, #errors { max-height: 60vh; overflow-y: auto; font: 12px/1.5 ui-monospace, monospace; }
-  #errors { max-height: 28vh; }
-  .row { display: grid; grid-template-columns: 70px 150px 1fr 70px; gap: 8px; padding: 1px 0;
-         border-bottom: 1px solid #20262e; }
+  .ok { color: var(--ok); } .warn { color: var(--warn); } .bad { color: var(--bad); }
+  .info { color: var(--info); } .dim { color: var(--dim); }
+  header button { background: var(--panel); color: var(--text); border: 1px solid var(--line);
+                  border-radius: 4px; padding: 3px 10px; cursor: pointer; font: inherit; }
+  #searches { max-height: 78vh; overflow-y: auto; }
+  .search { padding: 7px 8px; border: 1px solid transparent; border-bottom-color: var(--line); cursor: pointer; border-radius: 4px; }
+  .search:hover { background: #1e252d; }
+  .search.sel { border-color: var(--info); background: #1b2430; }
+  .search .t { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .search .m { font-size: 12px; display: flex; gap: 10px; color: var(--dim); }
+  .summary { display: flex; gap: 14px; flex-wrap: wrap; margin: 4px 0 12px; font-size: 13px; }
+  .summary b { font-size: 15px; }
+  .big { font-size: 18px; font-weight: 600; margin: 0; }
+  .sub { color: var(--dim); margin-bottom: 6px; }
+  #timeline, #system { max-height: 40vh; overflow-y: auto; font: 12px/1.5 ui-monospace, monospace; }
+  .row { display: grid; grid-template-columns: 60px 130px 1fr 70px; gap: 8px; border-bottom: 1px solid #20262e; }
   .row > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .row .ms { text-align: right; color: var(--dim); }
   .empty { color: var(--dim); padding: 8px 0; }
   .chips { display: flex; gap: 8px; flex-wrap: wrap; }
   .chip { border: 1px solid var(--line); border-radius: 4px; padding: 2px 8px; font-size: 12px; }
+  .tag { border: 1px solid var(--line); border-radius: 3px; padding: 0 5px; margin-right: 4px; font-size: 12px; }
 </style>
 </head>
 <body>
@@ -49,196 +57,218 @@
   <span class="dim" id="uptime"></span>
   <span style="flex:1"></span>
   <button id="pause">Pause</button>
-  <button id="reset">Reset counters</button>
+  <button id="reset">Clear</button>
 </header>
 <main>
+  <section class="panel"><h2>Searches</h2><div id="searches"></div></section>
   <div class="stack">
-    <section class="panel"><h2>Hosters resolved</h2><table id="hosters"></table></section>
-    <section class="panel"><h2>Plugin searches</h2><table id="plugins"></table></section>
+    <section class="panel" id="detail"></section>
+    <section class="panel"><h2>Timeline of this search</h2><div id="timeline"></div></section>
     <section class="panel"><h2>Breakers and unresolved hosters</h2>
       <div class="chips" id="breakers"></div>
       <div class="chips" id="unresolved" style="margin-top:8px"></div>
     </section>
-  </div>
-  <div class="stack">
-    <section class="panel"><h2>Errors</h2><div id="errors"></div></section>
-    <section class="panel"><h2>Live feed</h2>
-      <div class="tabs" id="tabs"></div>
-      <div id="feed"></div>
-    </section>
+    <section class="panel"><h2>Errors outside a search</h2><div id="system"></div></section>
   </div>
 </main>
 <script>
 "use strict";
-const MAX_ROWS = 300;
-const GOOD = new Set(["ok", "hits", "empty", "stream", "cached", "joined", "done", "target"]);
-const BAD = new Set(["error", "timeout", "network_error", "http_error"]);
-const FILTERS = {
-  all: () => true,
-  plugins: e => e.stage === "plugin_search" || e.name === "plugin_results",
-  hosters: e => e.stage === "hoster_resolve",
-  requests: e => e.stage === "stremio_request" || e.stage === "stremio_phase",
-  errors: e => isError(e),
-};
-
-let paused = false, filter = "all", queued = [];
-let stats = { plugin: {}, hoster: {} };
+// What a result means: a stream, a failure, or something in between
+const GOOD = new Set(["stream", "ok", "hits", "found", "done", "target", "streams"]);
+const INFO = new Set(["cached", "joined", "empty"]);
+const BAD = new Set(["error", "timeout", "network_error", "http_error", "dead", "unplayable", "check_error", "challenge"]);
+const cls = o => GOOD.has(o) ? "ok" : INFO.has(o) ? "info" : BAD.has(o) ? "bad" : "warn";
 const $ = id => document.getElementById(id);
 
-function cls(outcome) { return GOOD.has(outcome) ? "ok" : BAD.has(outcome) ? "bad" : "warn"; }
-function isError(e) {
-  return e.type === "log" || (e.type === "stage" && BAD.has(e.outcome));
+let searches = new Map();   // request_id -> search
+let system = [];            // events outside a search that are errors
+let selected = null, picked = false, paused = false, queued = [];
+
+function newSearch(id, ts) {
+  return { id, first: ts, last: ts, imdb: null, title: null, year: null, season: null, episode: null,
+           events: [], source: null, outcome: null, seconds: null, streams: null };
 }
-function subject(e) {
-  if (e.type === "log") return e.plugin || e.resolver || e.hoster || e.logger || "";
-  if (e.type === "value") return e.plugin || "";
-  return e.plugin || e.resolver || e.source || e.phase || e.kind || "";
-}
-function describe(e) {
-  if (e.type === "log") {
-    return [e.event, e.domain, e.error].filter(Boolean).join(" · ");
+function isError(e) { return e.type === "log" || (e.type === "stage" && BAD.has(e.outcome)); }
+
+function ingest(e) {
+  if (!e.request_id) { if (isError(e)) system.unshift(e), system.length = Math.min(system.length, 100); return; }
+  let s = searches.get(e.request_id);
+  if (!s) { s = newSearch(e.request_id, e.ts); searches.set(e.request_id, s); }
+  s.last = e.ts; s.events.push(e);
+  for (const k of ["imdb", "title", "year", "season", "episode"]) if (e[k] != null) s[k] = e[k];
+  if (e.type === "stage" && e.stage === "stremio_request") {
+    s.outcome = e.outcome; s.source = e.source; s.seconds = e.duration_ms / 1000;
   }
-  if (e.type === "value") return `${e.value} results`;
+  if (e.type === "value" && e.name === "stremio_streams") s.streams = e.value;
+  while (searches.size > 200) searches.delete(searches.keys().next().value);
+}
+
+const listed = () => [...searches.values()].filter(s => s.imdb || s.title).sort((a, b) => b.first - a.first);
+const time = ts => new Date(ts * 1000).toLocaleTimeString();
+const label = s => (s.title ? `${s.title}${s.year ? ` (${s.year})` : ""}` : s.imdb || s.id) +
+  (s.season != null ? ` S${String(s.season).padStart(2, "0")}E${String(s.episode ?? 0).padStart(2, "0")}` : "");
+
+// per resolver: calls, outcome counts, average time
+function resolvers(s) {
+  const map = new Map();
+  for (const e of s.events) {
+    if (e.type !== "stage" || e.stage !== "hoster_resolve") continue;
+    const r = map.get(e.resolver) || { name: e.resolver, calls: 0, outcomes: {}, ms: 0, timed: 0, logs: [] };
+    r.calls++; r.outcomes[e.outcome] = (r.outcomes[e.outcome] || 0) + 1;
+    if (e.duration_ms !== undefined) { r.ms += e.duration_ms; r.timed++; }
+    map.set(e.resolver, r);
+  }
+  for (const e of s.events) {
+    if (e.type !== "log") continue;
+    const r = map.get(e.domain) || map.get(e.resolver);
+    if (r) r.logs.push(e);
+  }
+  const count = (r, set) => Object.entries(r.outcomes).filter(([o]) => set.has(o)).reduce((n, [, c]) => n + c, 0);
+  return [...map.values()].map(r => ({ ...r, good: count(r, GOOD), bad: count(r, BAD), info: count(r, INFO) }))
+    .sort((a, b) => (b.bad > 0) - (a.bad > 0) || b.calls - a.calls);
+}
+function plugins(s) {
+  const map = new Map();
+  for (const e of s.events) {
+    if (e.plugin === undefined) continue;
+    const p = map.get(e.plugin) || { name: e.plugin, outcome: null, ms: null, results: null };
+    if (e.type === "stage" && e.stage === "plugin_search") { p.outcome = e.outcome; p.ms = e.duration_ms; }
+    if (e.type === "value" && e.name === "plugin_results") p.results = e.value;
+    map.set(e.plugin, p);
+  }
+  return [...map.values()].filter(p => p.outcome).sort((a, b) => (b.results || 0) - (a.results || 0));
+}
+
+function el(tag, props = {}, ...kids) {
+  const n = document.createElement(tag);
+  for (const [k, v] of Object.entries(props)) k === "class" ? n.className = v : k === "text" ? n.textContent = v : n[k] = v;
+  n.append(...kids);
+  return n;
+}
+function td(text, klass, left) { return el("td", { text, class: [klass, left ? "left" : ""].join(" ") }); }
+function table(head, rows, empty) {
+  const t = el("table");
+  t.append(el("tr", {}, ...head.map((h, i) => el("th", { text: h, class: i && h === "errors" ? "left" : "" }))));
+  if (!rows.length) { const c = td(empty, "dim"); c.colSpan = head.length; t.append(el("tr", {}, c)); }
+  for (const r of rows) t.append(r);
+  return t;
+}
+
+function renderList() {
+  const box = $("searches");
+  box.replaceChildren();
+  const items = listed();
+  if (!items.length) box.append(el("div", { class: "empty", text: "Waiting for a search in Stremio…" }));
+  for (const s of items) {
+    const res = resolvers(s);
+    const bad = res.filter(r => r.bad && !r.good).length, ok = res.filter(r => r.good).length;
+    const badge = s.outcome ? el("span", { class: cls(s.outcome), text: s.outcome === "streams" ? `${s.streams ?? "?"} streams` : s.outcome })
+                            : el("span", { class: "warn", text: "searching…" });
+    const item = el("div", { class: "search" + (s.id === selected ? " sel" : ""), onclick: () => { selected = s.id; picked = true; render(); } },
+      el("div", { class: "t", text: label(s), title: label(s) }),
+      el("div", { class: "m" }, el("span", { text: time(s.first) }), badge,
+        el("span", { class: "ok", text: `${ok} resolved` }), el("span", { class: bad ? "bad" : "dim", text: `${bad} failed` })));
+    box.append(item);
+  }
+}
+
+function renderDetail() {
+  const box = $("detail"), s = searches.get(selected);
+  box.replaceChildren();
+  if (!s) { box.append(el("div", { class: "empty", text: "Select a search." })); $("timeline").replaceChildren(); return; }
+  const res = resolvers(s), plug = plugins(s);
+  const withStream = res.filter(r => r.good).length, onlyBad = res.filter(r => r.bad && !r.good).length;
+  box.append(
+    el("p", { class: "big", text: label(s) }),
+    el("div", { class: "sub", text: [s.imdb, time(s.first), s.seconds != null ? `answered in ${s.seconds.toFixed(1)} s` : "",
+      s.source ? `search: ${s.source}` : ""].filter(Boolean).join(" · ") }),
+    el("div", { class: "summary" },
+      el("span", {}, el("b", { class: cls(s.outcome || "x"), text: s.outcome || "searching…" }), s.streams != null ? ` · ${s.streams} streams` : ""),
+      el("span", {}, el("b", { text: res.length }), " resolvers called"),
+      el("span", {}, el("b", { class: "ok", text: withStream }), " gave a stream"),
+      el("span", {}, el("b", { class: onlyBad ? "bad" : "dim", text: onlyBad }), " failed only"),
+      el("span", {}, el("b", { text: plug.length }), " plugins searched")),
+    el("h2", { text: "Resolvers" }),
+    table(["resolver", "called", "stream", "error", "cached", "avg", "errors"], res.map(r => {
+      const tr = el("tr");
+      const verdict = r.good ? "ok" : r.bad ? "bad" : "info";
+      tr.append(td(r.name, verdict), td(r.calls), td(r.good, r.good ? "ok" : "dim"), td(r.bad, r.bad ? "bad" : "dim"),
+        td(r.info, "info"), td(r.timed ? Math.round(r.ms / r.timed) + " ms" : "–", "dim"),
+        td(Object.entries(r.outcomes).filter(([o]) => BAD.has(o)).map(([o, c]) => `${o}×${c}`).join(" ") +
+           (r.logs.length ? " · " + [...new Set(r.logs.map(l => l.event))].slice(0, 3).join(", ") : ""), "bad", true));
+      return tr;
+    }), "No resolver was called (yet)."),
+    el("h2", { text: "Plugins", style: "margin-top:12px" }),
+    table(["plugin", "result", "results", "time"], plug.map(p => {
+      const tr = el("tr");
+      tr.append(td(p.name), td(p.outcome, cls(p.outcome)), td(p.results ?? "–", "dim"), td(p.ms != null ? Math.round(p.ms) + " ms" : "–", "dim"));
+      return tr;
+    }), "No plugin reported (yet)."));
+  renderTimeline(s);
+}
+
+function describe(e) {
+  if (e.type === "log") return [e.event, e.domain, e.error].filter(Boolean).join(" · ");
+  if (e.type === "value") return e.name === "stremio_streams" ? `${e.value} streams` : `${e.value} results`;
   return `${e.stage.replace(/_/g, " ")} → ${e.outcome}`;
 }
-function time(ts) { return new Date(ts * 1000).toLocaleTimeString(); }
-
-function tally(group, name, e) {
-  const s = stats[group][name] ||= { n: 0, ok: 0, bad: 0, ms: 0, timed: 0, last: "", lastTs: 0, results: 0 };
-  s.n++;
-  if (GOOD.has(e.outcome)) s.ok++; else if (BAD.has(e.outcome)) s.bad++;
-  if (e.duration_ms !== undefined) { s.ms += e.duration_ms; s.timed++; }
-  s.last = e.outcome; s.lastTs = e.ts;
+function subject(e) { return e.plugin || e.resolver || e.source || e.phase || e.kind || e.logger || ""; }
+function row(e, base) {
+  const klass = e.type === "log" ? (e.level === "error" ? "bad" : "warn") : e.type === "value" ? "dim" : cls(e.outcome);
+  const text = describe(e);
+  return el("div", { class: "row" },
+    el("span", { class: "dim", text: base != null ? `+${(e.ts - base).toFixed(1)}s` : time(e.ts) }),
+    el("span", { text: subject(e) }), el("span", { class: klass, text, title: text }),
+    el("span", { class: "ms", text: e.duration_ms !== undefined ? Math.round(e.duration_ms) + " ms" : "" }));
+}
+function renderTimeline(s) {
+  const box = $("timeline");
+  box.replaceChildren(...s.events.map(e => row(e, s.first)));
+}
+function renderSystem() {
+  const box = $("system");
+  box.replaceChildren(...system.map(e => row(e)));
+  if (!system.length) box.append(el("div", { class: "empty", text: "none" }));
 }
 
-function cell(text, klass) {
-  const td = document.createElement("td");
-  td.textContent = text;
-  if (klass) td.className = klass;
-  return td;
-}
-function renderTable(el, group, columns) {
-  const rows = Object.entries(stats[group]).sort((a, b) => b[1].lastTs - a[1].lastTs);
-  el.replaceChildren();
-  const head = document.createElement("tr");
-  for (const c of columns) { const th = document.createElement("th"); th.textContent = c; head.append(th); }
-  el.append(head);
-  if (!rows.length) {
-    const tr = document.createElement("tr");
-    const td = cell("nothing yet", "dim"); td.colSpan = columns.length; tr.append(td); el.append(tr);
-    return;
-  }
-  for (const [name, s] of rows) {
-    const tr = document.createElement("tr");
-    tr.append(
-      cell(name), cell(s.n), cell(s.ok, "ok"), cell(s.bad, s.bad ? "bad" : "dim"),
-      cell(group === "plugin" ? s.results : (s.timed ? Math.round(s.ms / s.timed) + " ms" : "–"), "dim"),
-      cell(`${s.last} ${time(s.lastTs)}`, cls(s.last)),
-    );
-    el.append(tr);
-  }
-}
-function renderStats() {
-  renderTable($("hosters"), "hoster", ["hoster", "runs", "ok", "failed", "avg", "last"]);
-  renderTable($("plugins"), "plugin", ["plugin", "searches", "ok", "failed", "results", "last"]);
+let scheduled = false;
+function render() {
+  if (scheduled) return;
+  scheduled = true;
+  requestAnimationFrame(() => {
+    scheduled = false;
+    const items = listed();
+    if (!picked && items.length) selected = items[0].id;
+    renderList(); renderDetail(); renderSystem();
+  });
 }
 
-function row(e) {
-  const div = document.createElement("div");
-  div.className = "row";
-  const t = document.createElement("span"); t.className = "dim"; t.textContent = time(e.ts);
-  const who = document.createElement("span"); who.textContent = subject(e);
-  const what = document.createElement("span");
-  what.textContent = describe(e);
-  what.title = what.textContent;
-  what.className = e.type === "log" ? (e.level === "error" ? "bad" : "warn") : (e.outcome ? cls(e.outcome) : "");
-  const ms = document.createElement("span"); ms.className = "ms";
-  ms.textContent = e.duration_ms !== undefined ? Math.round(e.duration_ms) + " ms" : "";
-  div.append(t, who, what, ms);
-  return div;
-}
-function prepend(container, e) {
-  container.prepend(row(e));
-  while (container.children.length > MAX_ROWS) container.lastChild.remove();
-}
-function placeholder(container, text) {
-  if (!container.children.length) {
-    const p = document.createElement("div"); p.className = "empty"; p.textContent = text; container.append(p);
-  }
-}
-
-function handle(e) {
-  if (e.type === "stage" && e.stage === "hoster_resolve") tally("hoster", e.resolver, e);
-  if (e.type === "stage" && e.stage === "plugin_search") tally("plugin", e.plugin, e);
-  if (e.type === "value" && e.name === "plugin_results") {
-    (stats.plugin[e.plugin] ||= { n: 0, ok: 0, bad: 0, ms: 0, timed: 0, last: "", lastTs: 0, results: 0 }).results += e.value;
-  }
-  $("feed").querySelector(".empty")?.remove();
-  if (FILTERS[filter](e)) prepend($("feed"), e);
-  if (isError(e)) { $("errors").querySelector(".empty")?.remove(); prepend($("errors"), e); }
-}
-
-const allEvents = [];
-function refeed() {
-  $("feed").replaceChildren();
-  for (const e of allEvents) if (FILTERS[filter](e)) prepend($("feed"), e);
-  placeholder($("feed"), "no events");
-}
-function receive(e) {
-  allEvents.push(e);
-  if (allEvents.length > 1000) allEvents.shift();
-  if (paused) { queued.push(e); return; }
-  handle(e); renderStats();
-}
-
-for (const name of Object.keys(FILTERS)) {
-  const b = document.createElement("button");
-  b.textContent = name; b.dataset.name = name;
-  b.onclick = () => {
-    filter = name;
-    for (const x of $("tabs").children) x.classList.toggle("on", x.dataset.name === name);
-    refeed();
-  };
-  if (name === filter) b.classList.add("on");
-  $("tabs").append(b);
-}
 $("pause").onclick = () => {
   paused = !paused;
-  $("pause").textContent = paused ? `Resume` : "Pause";
-  if (!paused) { for (const e of queued) handle(e); queued = []; renderStats(); }
+  $("pause").textContent = paused ? "Resume" : "Pause";
+  if (!paused) { queued.forEach(ingest); queued = []; render(); }
 };
-$("reset").onclick = () => { stats = { plugin: {}, hoster: {} }; renderStats(); };
-placeholder($("feed"), "waiting for events…");
-placeholder($("errors"), "no errors");
-renderStats();
+$("reset").onclick = () => { searches = new Map(); system = []; selected = null; picked = false; render(); };
 
 const source = new EventSource("/api/v1/dashboard/events");
 source.onopen = () => { $("dot").classList.add("live"); $("conn").textContent = "live"; };
 source.onerror = () => { $("dot").classList.remove("live"); $("conn").textContent = "reconnecting…"; };
-source.onmessage = m => receive(JSON.parse(m.data));
+source.onmessage = m => { const e = JSON.parse(m.data); if (paused) queued.push(e); else { ingest(e); render(); } };
 
-function chips(el, items, klass) {
-  el.replaceChildren();
-  if (!items.length) { const c = document.createElement("span"); c.className = "dim"; c.textContent = "none"; el.append(c); return; }
-  for (const [text, k] of items) {
-    const c = document.createElement("span"); c.className = "chip " + (k || klass || ""); c.textContent = text; el.append(c);
-  }
+function chips(el_, items) {
+  el_.replaceChildren();
+  if (!items.length) { el_.append(el("span", { class: "dim", text: "none" })); return; }
+  for (const [text, k] of items) el_.append(el("span", { class: "chip " + k, text }));
 }
 async function poll() {
   try {
-    const r = await fetch("/api/v1/stats/metrics");
-    const d = await r.json();
+    const d = await (await fetch("/api/v1/stats/metrics")).json();
     $("uptime").textContent = d.uptime_seconds !== undefined ? `up ${Math.floor(d.uptime_seconds / 60)} min` : "";
-    const breakers = Object.entries(d.circuit_breaker || {}).map(([name, b]) => {
-      const state = b.state || JSON.stringify(b);
-      return [`${name}: ${state}`, state === "closed" ? "ok" : "bad"];
-    });
-    chips($("breakers"), breakers.length ? breakers : []);
-    const unresolved = Object.entries(d.unresolved_hosters || {}).slice(0, 15).map(([h, n]) => [`${h} ×${n}`, "warn"]);
-    chips($("unresolved"), unresolved);
+    chips($("breakers"), Object.entries(d.circuit_breaker || {}).map(([n, b]) => [`${n}: ${b.state}`, b.state === "closed" ? "ok" : "bad"]));
+    chips($("unresolved"), Object.entries(d.unresolved_hosters || {}).slice(0, 15).map(([h, n]) => [`${h} ×${n}`, "warn"]));
   } catch (_) { /* the stream's own status shows a dead server */ }
 }
-poll(); setInterval(poll, 10000);
+render(); poll(); setInterval(poll, 10000);
 </script>
 </body>
 </html>

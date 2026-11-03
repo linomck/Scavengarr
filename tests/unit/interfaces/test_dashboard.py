@@ -192,3 +192,28 @@ async def test_stream_replays_backlog_then_live_events_and_skips_seen() -> None:
                 shutdown._shutting_down = True
 
     assert seen_plugins == ["seen", "live"]
+
+
+def test_events_carry_the_search_of_the_running_request() -> None:
+    import contextvars
+
+    from scavengarr.domain.ports.telemetry import bind_search
+
+    telemetry = Telemetry()
+
+    def run() -> None:
+        bind_search(imdb="tt1", season=1, episode=2)
+        bind_search(title="Some Movie", year=1999)
+        telemetry.count("hoster_resolve", "stream", resolver="voe")
+
+    contextvars.copy_context().run(run)
+    telemetry.count("hoster_resolve", "stream", resolver="voe")
+
+    tagged, untagged = telemetry.feed.recent()
+    assert (tagged["title"], tagged["year"], tagged["imdb"]) == (
+        "Some Movie",
+        1999,
+        "tt1",
+    )
+    assert (tagged["season"], tagged["episode"]) == (1, 2)
+    assert "title" not in untagged

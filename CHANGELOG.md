@@ -13,6 +13,7 @@ Live dashboard.
 - `GET /dashboard` is a single page (no external assets) that listens to `GET /api/v1/dashboard/events`, a server-sent event stream: the last 500 events first, then every new one (a reconnecting browser's `Last-Event-ID` skips what it has seen). `GET /api/v1/dashboard/recent` returns the same backlog as JSON.
 - The page shows per hoster and per plugin the runs, successes, failures and the last outcome, a live feed with filters (plugins, hosters, requests, errors), an errors panel and the open breakers and unresolved hosters (polled from `/api/v1/stats/metrics`).
 - Events come from `Telemetry` (every ended stage and every counted outcome, so the labels are the metrics' fixed sets; HLS segments stay out) and from a log handler that forwards warnings and errors with a fixed set of fields, a hoster URL reduced to its second-level domain and URLs in texts reduced the same way. No titles, ids or URL paths.
+- The page is organised by search: a list of the searched titles, and per search the resolvers called (stream, error, cached, time, error names), the plugins and a timeline. Events carry the request id and the search bound by `bind_search()`; the feed keeps the last 3000 events.
 - The dashboard and its stream are exempt from the API rate limit; the stream ends at shutdown. The page has no login: like `/metrics` it belongs on a trusted network.
 
 ---

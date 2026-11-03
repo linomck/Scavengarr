@@ -160,6 +160,7 @@ min_over_time(scavengarr_network_ok[1d])
 `Telemetry` owns an `EventFeed` (`infrastructure/telemetry/events.py`): every ended stage and every counted outcome is published with its labels and duration (HLS proxy and read-ahead excluded, one event per segment would bury the rest), and `plugin_results` as a value.
 `FeedLogHandler` on the root logger adds warnings and errors with the fields `plugin`, `resolver`, `hoster`, `stage`, `status_code`, `reason`, the second-level domain of a `url` and a shortened `error` text with URLs reduced to their domain.
 The feed keeps the last 500 events; `GET /api/v1/dashboard/events` streams them as server-sent events (backlog, then live; `Last-Event-ID` resumes) and `GET /api/v1/dashboard/recent` returns them as JSON.
+The page lists the Stremio searches (title, year, episode) and, per search, which resolvers were called, which gave a stream, which failed and with what, the plugins' outcomes and a timeline. The use case tags the events of a request with its search through `bind_search()` (`domain/ports/telemetry.py`, a context variable that tasks inherit); this is the one place the feed holds titles, it stays in memory (the last 3000 events) and reaches no metric, trace or log line. A `cached` resolution may be a remembered failure, so the page shows it apart from streams and errors.
 The page counts since it was opened plus the backlog; it has no login, so keep it on a trusted network like `/metrics`.
 
 ### Request id

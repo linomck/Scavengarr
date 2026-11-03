@@ -10,7 +10,8 @@ URLs or domains.
 from __future__ import annotations
 
 from contextlib import AbstractContextManager, nullcontext
-from typing import Literal, Protocol, runtime_checkable
+from contextvars import ContextVar
+from typing import Any, Literal, Protocol, runtime_checkable
 
 StageName = Literal[
     "stremio_request",
@@ -33,6 +34,20 @@ ValueName = Literal[
 ]
 
 AttributeValue = str | int | float | bool
+
+_SEARCH: ContextVar[dict[str, Any]] = ContextVar("scavengarr_search")
+
+
+def bind_search(**fields: Any) -> None:
+    """Name the search of the running request (imdb, title, year, season,
+    episode) for the dashboard's live feed. Tasks the request starts later
+    inherit it; it reaches no metric, trace or log line."""
+    _SEARCH.set({**_SEARCH.get({}), **fields})
+
+
+def current_search() -> dict[str, Any]:
+    """The search bound for the running request, empty without one."""
+    return _SEARCH.get({})
 
 
 class Stage(Protocol):

@@ -74,7 +74,12 @@ from scavengarr.domain.ports.plugin_score_store import PluginScoreStorePort
 from scavengarr.domain.ports.search_engine import SearchEnginePort
 from scavengarr.domain.ports.series_meta import NO_SERIES_META, SeriesMetaPort
 from scavengarr.domain.ports.stream_link_repository import StreamLinkRepository
-from scavengarr.domain.ports.telemetry import NO_TELEMETRY, Stage, TelemetryPort
+from scavengarr.domain.ports.telemetry import (
+    NO_TELEMETRY,
+    Stage,
+    TelemetryPort,
+    bind_search,
+)
 from scavengarr.domain.ports.tmdb import TmdbClientPort
 
 # ---------------------------------------------------------------------------
@@ -279,6 +284,10 @@ class StremioStreamUseCase:
                 return _NO_ANSWER
             request = translated
         category = 2000 if request.content_type == "movie" else 5000
+        # The request's search names its events (the dashboard lists them)
+        bind_search(
+            imdb=request.imdb_id, season=request.season, episode=request.episode
+        )
 
         # 1. Plugins: all stream plugins, or the best scored ones
         all_names = self._selector.stream_plugins()
@@ -307,6 +316,10 @@ class StremioStreamUseCase:
                 request, meta, absolute, titles, position_trusted=position_trusted
             )
             metadata.outcome = "not_found" if primary_title_info is None else "found"
+            if primary_title_info is not None:
+                bind_search(
+                    title=primary_title_info.title, year=primary_title_info.year
+                )
         if primary_title_info is None:
             log.warning("stremio_title_not_found", imdb_id=request.imdb_id)
             stage.outcome = "no_title"

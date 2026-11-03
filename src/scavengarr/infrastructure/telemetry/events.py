@@ -3,8 +3,14 @@
 ``Telemetry`` publishes every ended stage (a plugin search, a hoster
 resolution, a Stremio request ...) and ``FeedLogHandler`` every warning and
 error of the logs. The feed keeps the last events in memory and hands new
-ones to the dashboard's subscribers; it holds no titles, ids or URLs (the
-same rule as the metrics' labels, plus a hoster's second-level domain).
+ones to the dashboard's subscribers; it holds no URLs (the metrics' label
+rule, plus a hoster's second-level domain).
+
+The one exception is the search a Stremio request carries: its title, year,
+episode and IMDb id (bound by the use case, `bind_search()`) tag every
+event of the request, so the dashboard can list the searches. The feed lives
+in memory only and is shown by the dashboard alone; it reaches no metric,
+trace or log.
 """
 
 from __future__ import annotations
@@ -19,12 +25,16 @@ from typing import Any
 
 from urllib.parse import urlparse
 
+import structlog
+
+from scavengarr.domain.ports.telemetry import current_search
+
 Event = dict[str, Any]
 
 # Events kept for a dashboard that opens later
-BACKLOG = 500
+BACKLOG = 3000
 # Events a slow subscriber may lag behind before it loses the oldest ones
-SUBSCRIBER_QUEUE = 500
+SUBSCRIBER_QUEUE = 1000
 
 # Log fields the dashboard shows; anything else (titles, URLs) stays in the logs
 _LOG_FIELDS = ("plugin", "resolver", "hoster", "stage", "status_code", "reason")
@@ -45,9 +55,19 @@ class EventFeed:
         self._subscribers: dict[asyncio.Queue[Event], asyncio.AbstractEventLoop] = {}
 
     def publish(self, type_: str, /, **fields: Any) -> None:
+        context = dict(current_search())
+        request_id = structlog.contextvars.get_contextvars().get("request_id")
+        if request_id is not None:
+            context["request_id"] = request_id
         with self._lock:
             self._seq += 1
-            event: Event = {"id": self._seq, "ts": time.time(), "type": type_, **fields}
+            event: Event = {
+                "id": self._seq,
+                "ts": time.time(),
+                "type": type_,
+                **context,
+                **fields,
+            }
             self._events.append(event)
             subscribers = list(self._subscribers.items())
         for queue, loop in subscribers:
