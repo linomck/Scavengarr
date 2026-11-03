@@ -1,13 +1,10 @@
 # Scavengarr with Docker Compose (the published image, see the README).
 #
 #   docker compose up -d                          # Scavengarr only
-#   docker compose --profile solver up -d         # + Byparr captcha solver
-#   docker compose --profile redis up -d          # + Redis cache backend
-#   docker compose --profile tracing up -d        # + Tempo for traces
 #   docker compose pull && docker compose up -d   # update
 #
-# Profiles only start the extra service; enable its use in Scavengarr by
-# uncommenting the matching environment line below.
+# Traefik terminates TLS on the external "proxy" network (no published port);
+# Byparr always runs.
 
 services:
   scavengarr:
@@ -27,10 +24,11 @@ services:
     #     SCAVENGARR_COMMIT: ${SCAVENGARR_COMMIT:-}
     #     SCAVENGARR_BUILT: ${SCAVENGARR_BUILT:-}
     container_name: scavengarr
-    ports:
-      - "7979:7979"
+    networks:
+      - default # Byparr
+      - proxy # Traefik
     volumes:
-      - ./data:/app/config # config.yaml (edit, then restart); seeded when missing
+      - scavengarr-data:/app/config # config.yaml (edit, then restart); seeded when missing
       - scavengarr-cache:/app/cache # search cache, clearance cookies, scores
       # The image bundles the plugins; a mount replaces them (plugin work):
       # - ./plugins:/app/plugins
@@ -41,14 +39,10 @@ services:
       # uvicorn trusts only 127.0.0.1; the proxy comes in via the Docker
       # gateway or the LAN. LAN clients can then set these headers too.
       FORWARDED_ALLOW_IPS: "127.0.0.1,::1,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16,fc00::/7"
-      # Byparr/FlareSolverr sidecar (profile "solver"):
-      # SCAVENGARR_PLAYWRIGHT_SOLVER_URL: http://byparr:8191
-      # Redis cache backend (profile "redis"):
-      # SCAVENGARR_CACHE_BACKEND: redis
-      # SCAVENGARR_CACHE_REDIS_URL: redis://redis:6379/0
-      # SCAVENGARR_CACHE_MAX_CONCURRENT: "50" # Redis takes more parallel ops
-      # Traces to Tempo (profile "tracing"); Prometheus scrapes /metrics anyway:
-      # SCAVENGARR_TELEMETRY_TRACING_ENDPOINT: http://tempo:4318
+      # Byparr/FlareSolverr sidecar:
+      SCAVENGARR_PLAYWRIGHT_SOLVER_URL: http://byparr:8191
+      # Optional: TMDB API key, from the environment or a .env file
+      SCAVENGARR_TMDB_API_KEY: ${TMDB_API_KEY:-}
       # Every setting reads SCAVENGARR_<SECTION>_<KEY> (docs/reference/
       # configuration.md, "Settings"). The values of the default
       # config file, as environment entries; they win over the seeded file:
@@ -82,40 +76,26 @@ services:
       options:
         max-size: 20m
         max-file: "3"
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.scavengarr.rule=Host(`scavengarr.n2nd.de`)"
+      - "traefik.http.routers.scavengarr.entrypoints=websecure"
+      - "traefik.http.routers.scavengarr.tls.certresolver=le"
+      - "traefik.http.services.scavengarr.loadbalancer.server.port=7979"
     restart: unless-stopped
 
   byparr:
     image: ghcr.io/thephaseless/byparr:latest
     container_name: scavengarr-byparr
-    profiles: ["solver"]
     restart: unless-stopped
 
-  redis:
-    image: redis:7-alpine
-    container_name: scavengarr-redis
-    profiles: ["redis"]
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 10s
-      timeout: 3s
-      retries: 3
-    restart: unless-stopped
-
-  # Traces on demand (docs/current/observability.md): add it to Grafana as a
-  # Tempo data source (http://<host>:3200); keeps 3 days
-  tempo:
-    image: grafana/tempo:3.1.0
-    container_name: scavengarr-tempo
-    profiles: ["tracing"]
-    command: ["-config.file=/etc/tempo.yaml"]
-    volumes:
-      - ./docker/tempo.yaml:/etc/tempo.yaml:ro
-      - tempo-data:/var/tempo
-    ports:
-      - "3200:3200" # query API for Grafana
-    mem_limit: 512m
-    restart: unless-stopped
 
 volumes:
+  scavengarr-data:
+    name: aio_scavengarr-data
   scavengarr-cache:
-  tempo-data:
+    name: aio_scavengarr-cache
+
+networks:
+  proxy:
+    external: true

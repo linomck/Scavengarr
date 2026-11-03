@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 import os
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager, suppress
@@ -115,6 +116,7 @@ from scavengarr.infrastructure.telemetry.collectors import (
     BreakerCollector,
     BrowserPagesCollector,
 )
+from scavengarr.infrastructure.telemetry.events import FeedLogHandler
 from scavengarr.infrastructure.tmdb.client import HttpxTmdbClient
 from scavengarr.infrastructure.tmdb.imdb_fallback import ImdbFallbackClient
 from scavengarr.infrastructure.torznab.search_engine import HttpxSearchEngine
@@ -528,6 +530,9 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     if state.telemetry.tracing is not None:
         log.info("tracing_enabled", endpoint=config.telemetry.tracing_endpoint)
     state._loop_lag_task = asyncio.create_task(monitor_loop_lag(state.telemetry))
+    # The dashboard's live errors: warnings and errors of the logs
+    state._feed_log_handler = FeedLogHandler(state.telemetry.feed)
+    logging.getLogger().addHandler(state._feed_log_handler)
 
     # 0b) Auto-tune concurrency based on detected container/host resources
     if config.stremio.auto_tune_all:
@@ -861,5 +866,6 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
         # Spans of everything closed above still go out (blocks up to 3 s)
         await asyncio.to_thread(state.telemetry.close)
+        logging.getLogger().removeHandler(state._feed_log_handler)
 
         log.info("app_shutdown_complete")

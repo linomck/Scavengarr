@@ -53,21 +53,13 @@ docker run -d --name scavengarr \
 
 ### 3. Or use Docker Compose
 
-The repository's [`docker-compose.yml`](../../docker-compose.yml) runs the published image, or builds the checkout with the block it carries commented, and has three optional profiles:
-
-| Profile | Starts | Enable its use with |
-|---|---|---|
-| `solver` | Byparr, a captcha solver sidecar. | `SCAVENGARR_PLAYWRIGHT_SOLVER_URL` |
-| `redis` | A Redis cache backend. | `SCAVENGARR_CACHE_BACKEND` and `SCAVENGARR_CACHE_REDIS_URL` |
-| `tracing` | Grafana Tempo for traces. | `SCAVENGARR_TELEMETRY_TRACING_ENDPOINT` |
+The repository's [`docker-compose.yml`](../../docker-compose.yml) runs the published image, or builds the checkout with the block it carries commented. It joins the external `proxy` network of Traefik (labels carry its router; no port is published) and always runs Byparr, wired in through `SCAVENGARR_PLAYWRIGHT_SOLVER_URL`.
 
 ```bash
-docker compose up -d                       # Scavengarr only
-docker compose --profile solver up -d      # plus Byparr
+docker compose up -d                          # start
 docker compose pull && docker compose up -d   # update
 ```
 
-A profile only starts its service; the matching `environment:` line in the file, commented, makes Scavengarr use it.
 The service sets `init: true`, `shm_size: 1gb` (Chromium needs shared memory), `FORWARDED_ALLOW_IPS` for a reverse proxy (step 7) and a log rotation (Troubleshooting).
 An updater such as [watchtower](https://github.com/containrrr/watchtower) can run the update on a schedule.
 

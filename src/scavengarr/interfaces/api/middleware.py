@@ -17,13 +17,15 @@ _GC_INTERVAL = 256
 
 # Not counted: the requests of a playing stream (HLS manifests and segments
 # every few seconds, dozens at playback start; /play again for each seek),
-# a 429 would end its playback, and health probes
+# a 429 would end its playback, health probes and the dashboard's stream
+# (the browser reconnects it on its own)
 _EXEMPT_PREFIXES = (
     "/api/v1/stremio/proxy/",
     "/api/v1/stremio/play/",
     "/api/v1/stremio/health",
     "/api/v1/healthz",
     "/api/v1/readyz",
+    "/api/v1/dashboard/",
 )
 
 

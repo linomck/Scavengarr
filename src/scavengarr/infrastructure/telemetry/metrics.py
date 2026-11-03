@@ -34,6 +34,7 @@ from prometheus_client.exposition import CONTENT_TYPE_PLAIN_0_0_4
 
 from scavengarr.domain.ports.telemetry import AttributeValue, StageName, ValueName
 from scavengarr.infrastructure.telemetry.collectors import ContainerCollector
+from scavengarr.infrastructure.telemetry.events import EventFeed
 from scavengarr.infrastructure.version import build_identity
 
 if TYPE_CHECKING:
@@ -130,6 +131,9 @@ _STAGES: dict[StageName, _StageSpec] = {
     ),
 }
 
+# One event per segment would bury the dashboard's feed
+_UNFED: frozenset[StageName] = frozenset({"hls_proxy", "hls_readahead"})
+
 _SUCCESSES = ("hits", "empty")
 _FAILURES = ("error", "cut", "timeout")
 
@@ -197,6 +201,7 @@ class Telemetry:
 
     def __init__(self, *, tracing: Tracing | None = None) -> None:
         self.tracing = tracing
+        self.feed = EventFeed()
         self.registry = CollectorRegistry()
         self._started = time.monotonic()
         self._durations = {
@@ -270,8 +275,12 @@ class Telemetry:
 
     def count(self, name: StageName, outcome: str, /, **labels: str) -> None:
         self._outcomes[name].labels(**labels, outcome=outcome).inc()
+        if name not in _UNFED:
+            self.feed.publish("stage", stage=name, outcome=outcome, **labels)
 
     def record(self, name: ValueName, value: float, /, **labels: str) -> None:
+        if name == "plugin_results":
+            self.feed.publish("value", name=name, value=value, **labels)
         metric = self._values[name]
         child = metric.labels(**labels) if labels else metric
         if isinstance(child, Histogram):
@@ -289,6 +298,14 @@ class Telemetry:
         # A stage without labels of its own has a plain histogram
         (duration.labels(**labels) if labels else duration).observe(seconds)
         self._outcomes[name].labels(**labels, outcome=outcome).inc()
+        if name not in _UNFED:
+            self.feed.publish(
+                "stage",
+                stage=name,
+                outcome=outcome,
+                duration_ms=round(seconds * 1000, 1),
+                **labels,
+            )
 
     def start_span(self, name: StageName, labels: dict[str, str]) -> TracedStage | None:
         """The span of a starting stage, with tracing on (called by the stage)."""

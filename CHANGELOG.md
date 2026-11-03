@@ -4,6 +4,25 @@ All notable changes to Scavengarr are documented in this file. Format: version, 
 
 ---
 
+## Unreleased
+
+Live dashboard.
+
+### Added: Live Dashboard at `/dashboard`
+
+- `GET /dashboard` is a single page (no external assets) that listens to `GET /api/v1/dashboard/events`, a server-sent event stream: the last 500 events first, then every new one (a reconnecting browser's `Last-Event-ID` skips what it has seen). `GET /api/v1/dashboard/recent` returns the same backlog as JSON.
+- The page shows per hoster and per plugin the runs, successes, failures and the last outcome, a live feed with filters (plugins, hosters, requests, errors), an errors panel and the open breakers and unresolved hosters (polled from `/api/v1/stats/metrics`).
+- Events come from `Telemetry` (every ended stage and every counted outcome, so the labels are the metrics' fixed sets; HLS segments stay out) and from a log handler that forwards warnings and errors with a fixed set of fields, a hoster URL reduced to its second-level domain and URLs in texts reduced the same way. No titles, ids or URL paths.
+- The dashboard and its stream are exempt from the API rate limit; the stream ends at shutdown. The page has no login: like `/metrics` it belongs on a trusted network.
+
+---
+
+### Changed: Compose File for Traefik
+
+- `docker-compose.yml` joins the external `proxy` network with Traefik labels (no published port), uses the named volumes `aio_scavengarr-data` (config) and `aio_scavengarr-cache`, takes the TMDB key from `TMDB_API_KEY`, and always runs Byparr, wired in through `SCAVENGARR_PLAYWRIGHT_SOLVER_URL`. The Redis and Tempo services and their profiles are gone from the file.
+
+---
+
 ## v0.5.1 - 2026-10-20
 
 Security: certifi's CA bundle drops the root whose intermediate CAs lost their keys (GHSA-6q48-6c7w-9gw2); every httpx client of the app verifies TLS against it, so the image carries the fix with its rebuild. Repository upkeep: CI ends in the one check `main`'s ruleset requires and runs weekly on `main`; Dependabot takes a version a week after its release, updates pre-commit's hooks too, and its green minor and patch updates merge into `staging` by themselves; pre-commit runs the venv's ruff, pinned in `pyproject.toml` only; every release tag gets its page; and the tests check a URL's host exactly.

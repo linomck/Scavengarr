@@ -26,6 +26,9 @@ The default base URL is `http://localhost:7979` (`PORT` or `--port`).
 | `GET` | `/api/v1/stats/plugin-scores` | JSON | The plugin scores. |
 | `GET` | `/api/v1/stats/metrics` | JSON | The metrics as JSON. |
 | `GET` | `/metrics` | text | The Prometheus metrics. |
+| `GET` | `/dashboard` | HTML | The live dashboard (root path). |
+| `GET` | `/api/v1/dashboard/events` | SSE | Backlog of the last 500 events, then live events. |
+| `GET` | `/api/v1/dashboard/recent` | JSON | The same backlog. |
 
 The Stremio endpoints (`/api/v1/stremio/...`) are described in [Stremio addon](../current/stremio-addon.md), the plugin scores in [Plugins](../current/plugins.md#scores-and-probes), and the stats and metrics in [Observability](../current/observability.md).
 

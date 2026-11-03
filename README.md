@@ -162,17 +162,7 @@ Image tags: `latest` (the newest release), `vX.Y.Z` (one release), `staging` (ev
 
 Scavengarr reads `data/config.yaml` (mounted into the container; when the file is missing, the container writes the default there on its first start, if the directory is writable for its user, uid 1000). Edit the config and run `docker compose restart` to apply changes. In Docker, the log level and format, headless mode and the cache and plugin directories come from environment variables (`Dockerfile.prod`, `docker-compose.yml`), which beat `config.yaml`: change those in `docker-compose.yml`.
 
-**Optional services** (see [`docker-compose.yml`](docker-compose.yml)):
-
-| Profile | Starts | Enable it in Scavengarr |
-|---|---|---|
-| `solver` | [Byparr](https://github.com/ThePhaseless/Byparr) captcha solver | uncomment `SCAVENGARR_PLAYWRIGHT_SOLVER_URL` |
-| `redis` | Redis as cache backend | uncomment `SCAVENGARR_CACHE_BACKEND`, `SCAVENGARR_CACHE_REDIS_URL` and `SCAVENGARR_CACHE_MAX_CONCURRENT` |
-| `tracing` | [Grafana Tempo](https://grafana.com/oss/tempo/) for traces on demand ([Observability](docs/current/observability.md)) | uncomment `SCAVENGARR_TELEMETRY_TRACING_ENDPOINT` |
-
-```bash
-docker compose --profile solver --profile redis up -d
-```
+The compose file joins Traefik's external `proxy` network (create it once with `docker network create proxy`; set the router's `Host(...)` rule, and `TMDB_API_KEY` in `.env` if you have a key; no port is published) and always runs [Byparr](https://github.com/ThePhaseless/Byparr), the captcha solver, wired in through `SCAVENGARR_PLAYWRIGHT_SOLVER_URL`.
 
 **Updating:**
 
@@ -299,7 +289,7 @@ Every stream passed a playback check when it was listed, and Scavengarr resolves
 <details>
 <summary><b>A site is behind Cloudflare or a captcha</b></summary>
 
-The built-in headful browser passes most Cloudflare challenges; in Docker it runs on a virtual display automatically. For sites it cannot pass, start the Byparr sidecar (`--profile solver`) and set `SCAVENGARR_PLAYWRIGHT_SOLVER_URL`. See [Browser and challenges](docs/current/browser-and-challenges.md).
+The built-in headful browser passes most Cloudflare challenges; in Docker it runs on a virtual display automatically. For sites it cannot pass, use the Byparr sidecar (a service of `docker-compose.yml`, wired in through `SCAVENGARR_PLAYWRIGHT_SOLVER_URL`). See [Browser and challenges](docs/current/browser-and-challenges.md).
 
 </details>
 

@@ -1,0 +1,244 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Scavengarr dashboard</title>
+<style>
+  :root {
+    --bg: #0f1216; --panel: #181d24; --line: #2a313b; --text: #d8dee6; --dim: #8592a1;
+    --ok: #3fb950; --warn: #d29922; --bad: #f85149; --info: #58a6ff;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text);
+         font: 14px/1.4 system-ui, sans-serif; }
+  header { display: flex; align-items: center; gap: 16px; padding: 10px 16px;
+           border-bottom: 1px solid var(--line); position: sticky; top: 0; background: var(--bg); z-index: 1; }
+  h1 { font-size: 16px; margin: 0; }
+  h2 { font-size: 13px; margin: 0 0 8px; color: var(--dim); text-transform: uppercase; letter-spacing: .05em; }
+  .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--bad); display: inline-block; margin-right: 6px; }
+  .dot.live { background: var(--ok); }
+  main { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr); gap: 12px; padding: 12px; }
+  @media (max-width: 1000px) { main { grid-template-columns: 1fr; } }
+  .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 12px; min-width: 0; }
+  .stack { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th, td { text-align: right; padding: 3px 6px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+  th:first-child, td:first-child { text-align: left; }
+  th { color: var(--dim); font-weight: 500; }
+  .ok { color: var(--ok); } .warn { color: var(--warn); } .bad { color: var(--bad); } .dim { color: var(--dim); }
+  .tabs button, header button { background: var(--panel); color: var(--text); border: 1px solid var(--line);
+         border-radius: 4px; padding: 3px 10px; cursor: pointer; font: inherit; }
+  .tabs button.on { border-color: var(--info); color: var(--info); }
+  .tabs { display: flex; gap: 6px; margin-bottom: 8px; flex-wrap: wrap; }
+  #feed, #errors { max-height: 60vh; overflow-y: auto; font: 12px/1.5 ui-monospace, monospace; }
+  #errors { max-height: 28vh; }
+  .row { display: grid; grid-template-columns: 70px 150px 1fr 70px; gap: 8px; padding: 1px 0;
+         border-bottom: 1px solid #20262e; }
+  .row > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .row .ms { text-align: right; color: var(--dim); }
+  .empty { color: var(--dim); padding: 8px 0; }
+  .chips { display: flex; gap: 8px; flex-wrap: wrap; }
+  .chip { border: 1px solid var(--line); border-radius: 4px; padding: 2px 8px; font-size: 12px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Scavengarr</h1>
+  <span><span id="dot" class="dot"></span><span id="conn">connecting…</span></span>
+  <span class="dim" id="uptime"></span>
+  <span style="flex:1"></span>
+  <button id="pause">Pause</button>
+  <button id="reset">Reset counters</button>
+</header>
+<main>
+  <div class="stack">
+    <section class="panel"><h2>Hosters resolved</h2><table id="hosters"></table></section>
+    <section class="panel"><h2>Plugin searches</h2><table id="plugins"></table></section>
+    <section class="panel"><h2>Breakers and unresolved hosters</h2>
+      <div class="chips" id="breakers"></div>
+      <div class="chips" id="unresolved" style="margin-top:8px"></div>
+    </section>
+  </div>
+  <div class="stack">
+    <section class="panel"><h2>Errors</h2><div id="errors"></div></section>
+    <section class="panel"><h2>Live feed</h2>
+      <div class="tabs" id="tabs"></div>
+      <div id="feed"></div>
+    </section>
+  </div>
+</main>
+<script>
+"use strict";
+const MAX_ROWS = 300;
+const GOOD = new Set(["ok", "hits", "empty", "stream", "cached", "joined", "done", "target"]);
+const BAD = new Set(["error", "timeout", "network_error", "http_error"]);
+const FILTERS = {
+  all: () => true,
+  plugins: e => e.stage === "plugin_search" || e.name === "plugin_results",
+  hosters: e => e.stage === "hoster_resolve",
+  requests: e => e.stage === "stremio_request" || e.stage === "stremio_phase",
+  errors: e => isError(e),
+};
+
+let paused = false, filter = "all", queued = [];
+let stats = { plugin: {}, hoster: {} };
+const $ = id => document.getElementById(id);
+
+function cls(outcome) { return GOOD.has(outcome) ? "ok" : BAD.has(outcome) ? "bad" : "warn"; }
+function isError(e) {
+  return e.type === "log" || (e.type === "stage" && BAD.has(e.outcome));
+}
+function subject(e) {
+  if (e.type === "log") return e.plugin || e.resolver || e.hoster || e.logger || "";
+  if (e.type === "value") return e.plugin || "";
+  return e.plugin || e.resolver || e.source || e.phase || e.kind || "";
+}
+function describe(e) {
+  if (e.type === "log") {
+    return [e.event, e.domain, e.error].filter(Boolean).join(" · ");
+  }
+  if (e.type === "value") return `${e.value} results`;
+  return `${e.stage.replace(/_/g, " ")} → ${e.outcome}`;
+}
+function time(ts) { return new Date(ts * 1000).toLocaleTimeString(); }
+
+function tally(group, name, e) {
+  const s = stats[group][name] ||= { n: 0, ok: 0, bad: 0, ms: 0, timed: 0, last: "", lastTs: 0, results: 0 };
+  s.n++;
+  if (GOOD.has(e.outcome)) s.ok++; else if (BAD.has(e.outcome)) s.bad++;
+  if (e.duration_ms !== undefined) { s.ms += e.duration_ms; s.timed++; }
+  s.last = e.outcome; s.lastTs = e.ts;
+}
+
+function cell(text, klass) {
+  const td = document.createElement("td");
+  td.textContent = text;
+  if (klass) td.className = klass;
+  return td;
+}
+function renderTable(el, group, columns) {
+  const rows = Object.entries(stats[group]).sort((a, b) => b[1].lastTs - a[1].lastTs);
+  el.replaceChildren();
+  const head = document.createElement("tr");
+  for (const c of columns) { const th = document.createElement("th"); th.textContent = c; head.append(th); }
+  el.append(head);
+  if (!rows.length) {
+    const tr = document.createElement("tr");
+    const td = cell("nothing yet", "dim"); td.colSpan = columns.length; tr.append(td); el.append(tr);
+    return;
+  }
+  for (const [name, s] of rows) {
+    const tr = document.createElement("tr");
+    tr.append(
+      cell(name), cell(s.n), cell(s.ok, "ok"), cell(s.bad, s.bad ? "bad" : "dim"),
+      cell(group === "plugin" ? s.results : (s.timed ? Math.round(s.ms / s.timed) + " ms" : "–"), "dim"),
+      cell(`${s.last} ${time(s.lastTs)}`, cls(s.last)),
+    );
+    el.append(tr);
+  }
+}
+function renderStats() {
+  renderTable($("hosters"), "hoster", ["hoster", "runs", "ok", "failed", "avg", "last"]);
+  renderTable($("plugins"), "plugin", ["plugin", "searches", "ok", "failed", "results", "last"]);
+}
+
+function row(e) {
+  const div = document.createElement("div");
+  div.className = "row";
+  const t = document.createElement("span"); t.className = "dim"; t.textContent = time(e.ts);
+  const who = document.createElement("span"); who.textContent = subject(e);
+  const what = document.createElement("span");
+  what.textContent = describe(e);
+  what.title = what.textContent;
+  what.className = e.type === "log" ? (e.level === "error" ? "bad" : "warn") : (e.outcome ? cls(e.outcome) : "");
+  const ms = document.createElement("span"); ms.className = "ms";
+  ms.textContent = e.duration_ms !== undefined ? Math.round(e.duration_ms) + " ms" : "";
+  div.append(t, who, what, ms);
+  return div;
+}
+function prepend(container, e) {
+  container.prepend(row(e));
+  while (container.children.length > MAX_ROWS) container.lastChild.remove();
+}
+function placeholder(container, text) {
+  if (!container.children.length) {
+    const p = document.createElement("div"); p.className = "empty"; p.textContent = text; container.append(p);
+  }
+}
+
+function handle(e) {
+  if (e.type === "stage" && e.stage === "hoster_resolve") tally("hoster", e.resolver, e);
+  if (e.type === "stage" && e.stage === "plugin_search") tally("plugin", e.plugin, e);
+  if (e.type === "value" && e.name === "plugin_results") {
+    (stats.plugin[e.plugin] ||= { n: 0, ok: 0, bad: 0, ms: 0, timed: 0, last: "", lastTs: 0, results: 0 }).results += e.value;
+  }
+  $("feed").querySelector(".empty")?.remove();
+  if (FILTERS[filter](e)) prepend($("feed"), e);
+  if (isError(e)) { $("errors").querySelector(".empty")?.remove(); prepend($("errors"), e); }
+}
+
+const allEvents = [];
+function refeed() {
+  $("feed").replaceChildren();
+  for (const e of allEvents) if (FILTERS[filter](e)) prepend($("feed"), e);
+  placeholder($("feed"), "no events");
+}
+function receive(e) {
+  allEvents.push(e);
+  if (allEvents.length > 1000) allEvents.shift();
+  if (paused) { queued.push(e); return; }
+  handle(e); renderStats();
+}
+
+for (const name of Object.keys(FILTERS)) {
+  const b = document.createElement("button");
+  b.textContent = name; b.dataset.name = name;
+  b.onclick = () => {
+    filter = name;
+    for (const x of $("tabs").children) x.classList.toggle("on", x.dataset.name === name);
+    refeed();
+  };
+  if (name === filter) b.classList.add("on");
+  $("tabs").append(b);
+}
+$("pause").onclick = () => {
+  paused = !paused;
+  $("pause").textContent = paused ? `Resume` : "Pause";
+  if (!paused) { for (const e of queued) handle(e); queued = []; renderStats(); }
+};
+$("reset").onclick = () => { stats = { plugin: {}, hoster: {} }; renderStats(); };
+placeholder($("feed"), "waiting for events…");
+placeholder($("errors"), "no errors");
+renderStats();
+
+const source = new EventSource("/api/v1/dashboard/events");
+source.onopen = () => { $("dot").classList.add("live"); $("conn").textContent = "live"; };
+source.onerror = () => { $("dot").classList.remove("live"); $("conn").textContent = "reconnecting…"; };
+source.onmessage = m => receive(JSON.parse(m.data));
+
+function chips(el, items, klass) {
+  el.replaceChildren();
+  if (!items.length) { const c = document.createElement("span"); c.className = "dim"; c.textContent = "none"; el.append(c); return; }
+  for (const [text, k] of items) {
+    const c = document.createElement("span"); c.className = "chip " + (k || klass || ""); c.textContent = text; el.append(c);
+  }
+}
+async function poll() {
+  try {
+    const r = await fetch("/api/v1/stats/metrics");
+    const d = await r.json();
+    $("uptime").textContent = d.uptime_seconds !== undefined ? `up ${Math.floor(d.uptime_seconds / 60)} min` : "";
+    const breakers = Object.entries(d.circuit_breaker || {}).map(([name, b]) => {
+      const state = b.state || JSON.stringify(b);
+      return [`${name}: ${state}`, state === "closed" ? "ok" : "bad"];
+    });
+    chips($("breakers"), breakers.length ? breakers : []);
+    const unresolved = Object.entries(d.unresolved_hosters || {}).slice(0, 15).map(([h, n]) => [`${h} ×${n}`, "warn"]);
+    chips($("unresolved"), unresolved);
+  } catch (_) { /* the stream's own status shows a dead server */ }
+}
+poll(); setInterval(poll, 10000);
+</script>
+</body>
+</html>

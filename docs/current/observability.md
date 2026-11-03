@@ -154,6 +154,14 @@ histogram_quantile(0.9, sum by (le, kind) (rate(scavengarr_browser_page_wait_sec
 min_over_time(scavengarr_network_ok[1d])
 ```
 
+### Live dashboard
+
+`GET /dashboard` shows what the core does as it happens: which hosters resolve (runs, successes, failures, last outcome), plugin searches, Stremio requests, the open breakers and the warnings and errors of the logs.
+`Telemetry` owns an `EventFeed` (`infrastructure/telemetry/events.py`): every ended stage and every counted outcome is published with its labels and duration (HLS proxy and read-ahead excluded, one event per segment would bury the rest), and `plugin_results` as a value.
+`FeedLogHandler` on the root logger adds warnings and errors with the fields `plugin`, `resolver`, `hoster`, `stage`, `status_code`, `reason`, the second-level domain of a `url` and a shortened `error` text with URLs reduced to their domain.
+The feed keeps the last 500 events; `GET /api/v1/dashboard/events` streams them as server-sent events (backlog, then live; `Last-Event-ID` resumes) and `GET /api/v1/dashboard/recent` returns them as JSON.
+The page counts since it was opened plus the backlog; it has no login, so keep it on a trusted network like `/metrics`.
+
 ### Request id
 
 Every HTTP request gets a 12-hex-digit `request_id` in the structlog context.
@@ -198,7 +206,7 @@ The record is evidence, not a rule: the lifecycle decision for a dead site stays
 Traces show one request as a tree: the request, its phases, each plugin search and each hoster resolution, with durations and outcomes.
 They cost a backend that runs around the clock, so they are off by default and meant for looking into a problem.
 
-1. Start Tempo: `docker compose --profile tracing up -d tempo` (`docker/tempo.yaml`: OTLP/HTTP on 4318, query API on 3200, traces kept 3 days, 512 MB memory limit).
+1. Run Tempo with your own container or a compose service of your own, configured with `docker/tempo.yaml` ( OTLP/HTTP on 4318, query API on 3200, traces kept 3 days, 512 MB memory limit).
 2. Set `telemetry.tracing_endpoint` (or `SCAVENGARR_TELEMETRY_TRACING_ENDPOINT`) to `http://tempo:4318` and restart Scavengarr. Behind a VPN container, publish Tempo's port 4318 (`- "4318:4318"`) and use the host's IP: name lookups would go through the VPN.
 3. Add Tempo to Grafana as a data source (`http://<host>:3200`) and search with TraceQL, for example `{ name = "stremio_request" && duration > 10s }` or `{ span.request_id = "a1b2c3d4e5f6" }` with the id from a log line.
 

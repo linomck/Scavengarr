@@ -14,6 +14,7 @@ from scavengarr.infrastructure.graceful_shutdown import GracefulShutdown
 
 if TYPE_CHECKING:
     import asyncio
+    import logging
 
     from scavengarr.application.use_cases.stremio_catalog import StremioCatalogUseCase
     from scavengarr.application.use_cases.stremio_links import StremioLinks
@@ -120,6 +121,7 @@ class AppState(State):
 
     # Event-loop lag monitor (feeds telemetry)
     _loop_lag_task: asyncio.Task[None]
+    _feed_log_handler: logging.Handler
 
     # Adapts the stealth browser's page limit (PageBudget)
     _page_budget_task: asyncio.Task[None]

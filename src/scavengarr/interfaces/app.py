@@ -51,6 +51,7 @@ def create_app(config: AppConfig) -> FastAPI:
             RateLimitMiddleware, requests_per_minute=config.api_rate_limit_rpm
         )
 
+    from scavengarr.interfaces.api.dashboard import router as dashboard_router
     from scavengarr.interfaces.api.download.router import router as download_router
     from scavengarr.interfaces.api.stats import router as stats_router
     from scavengarr.interfaces.api.stremio import router as stremio_router
@@ -60,6 +61,7 @@ def create_app(config: AppConfig) -> FastAPI:
     app.include_router(torznab_router, prefix="/api/v1")
     app.include_router(stremio_router, prefix="/api/v1")
     app.include_router(stats_router, prefix="/api/v1")
+    app.include_router(dashboard_router)
 
     @app.get("/api/v1/healthz")
     async def healthz() -> dict[str, str | int | list[str]]:
